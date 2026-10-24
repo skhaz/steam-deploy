@@ -6,32 +6,27 @@ on:
       - diag-steamcmd
 
 jobs:
-  diag:
+  native:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, ubuntu-26.04]
-        seccomp: ["default", "unconfined"]
+        os: [ubuntu-latest, ubuntu-24.04, ubuntu-26.04]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v7
-      - name: Docker info
+      - name: Runner info
         run: |
-          docker version --format 'client={{.Client.Version}} server={{.Server.Version}}'
-          docker info --format '{{.SecurityOptions}}'
-          uname -r
-      - name: Build image
-        run: docker build -t steamdeploy .
-      - name: Run steamcmd
+          . /etc/os-release && echo "$PRETTY_NAME"
+          docker version --format 'docker={{.Server.Version}}'
+          dpkg -l | grep -E "lib32gcc|libc6-i386|lib32stdc" || echo "no 32-bit libs"
+      - name: Native steamcmd
         run: |
-          opt=""
-          if [ "${{ matrix.seccomp }}" = "unconfined" ]; then opt="--security-opt seccomp=unconfined"; fi
+          mkdir -p "$RUNNER_TEMP/steamcmd"
+          curl -fsSL https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz | tar -xz -C "$RUNNER_TEMP/steamcmd"
           set +e
-          docker run --rm $opt -e HOME=/github/home --entrypoint bash steamdeploy -c '
-            mkdir -p /github/home
-            steamcmd +quit; rc=$?
-            echo "steamcmd rc=$rc"
-            echo "--- stderr.txt"; tail -20 /github/home/Steam/logs/stderr.txt 2>/dev/null
-            echo "--- bootstrap_log"; tail -20 /github/home/Steam/logs/bootstrap_log.txt 2>/dev/null
-            exit $rc'
-          echo "exit=$?"
+          "$RUNNER_TEMP/steamcmd/steamcmd.sh" +quit
+          echo "native rc=$?"
+      - name: cm2network/steamcmd image (game-ci/cli docker mode)
+        run: |
+          set +e
+          docker run --rm cm2network/steamcmd:latest /home/steam/steamcmd/steamcmd.sh +quit 2>&1 | tail -5
+          echo "cm2network rc=${PIPESTATUS[0]}"
