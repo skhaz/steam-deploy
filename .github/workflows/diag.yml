@@ -1,0 +1,37 @@
+name: Diagnose steamcmd
+
+on:
+  push:
+    branches:
+      - diag-steamcmd
+
+jobs:
+  diag:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-26.04]
+        seccomp: ["default", "unconfined"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Docker info
+        run: |
+          docker version --format 'client={{.Client.Version}} server={{.Server.Version}}'
+          docker info --format '{{.SecurityOptions}}'
+          uname -r
+      - name: Build image
+        run: docker build -t steamdeploy .
+      - name: Run steamcmd
+        run: |
+          opt=""
+          if [ "${{ matrix.seccomp }}" = "unconfined" ]; then opt="--security-opt seccomp=unconfined"; fi
+          set +e
+          docker run --rm $opt -e HOME=/github/home --entrypoint bash steamdeploy -c '
+            mkdir -p /github/home
+            steamcmd +quit; rc=$?
+            echo "steamcmd rc=$rc"
+            echo "--- stderr.txt"; tail -20 /github/home/Steam/logs/stderr.txt 2>/dev/null
+            echo "--- bootstrap_log"; tail -20 /github/home/Steam/logs/bootstrap_log.txt 2>/dev/null
+            exit $rc'
+          echo "exit=$?"
