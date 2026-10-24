@@ -6,28 +6,21 @@ on:
       - diag-steamcmd
 
 jobs:
-  layout:
+  home:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-26.04, macos-latest, windows-latest]
+        os: [ubuntu-latest, ubuntu-26.04, macos-latest]
     runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        shell: bash
     steps:
-      - name: Install and bootstrap Valve steamcmd
+      - name: steamcmd with a per-run HOME
         run: |
-          D="$RUNNER_TEMP/steamcmd"; mkdir -p "$D"; cd "$D"
+          D="$RUNNER_TEMP/steamcmd"; H="$RUNNER_TEMP/steam-home"; mkdir -p "$D" "$H"; cd "$D"
           case "$RUNNER_OS" in
-            Linux) curl -fsSL https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz | tar -xz; exe=./steamcmd.sh ;;
-            macOS) curl -fsSL https://steamcdn-a.akamaihd.net/client/installer/steamcmd_osx.tar.gz | tar -xz; exe=./steamcmd.sh ;;
-            Windows) curl -fsSLo steamcmd.zip https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip && unzip -q steamcmd.zip && rm steamcmd.zip; exe=./steamcmd.exe ;;
+            Linux) curl -fsSL https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz | tar -xz ;;
+            macOS) curl -fsSL https://steamcdn-a.akamaihd.net/client/installer/steamcmd_osx.tar.gz | tar -xz ;;
           esac
           set +e
-          "$exe" +quit > out.txt 2>&1; rc=$?
-          tail -4 out.txt; echo "rc=$rc"
-          "$exe" +quit > out2.txt 2>&1; echo "rc2=$?"; tail -2 out2.txt
-          echo "--- dirs in install dir"; ls "$D"
-          echo "--- HOME Steam"; ls -la "$HOME/Steam" "$HOME/.steam" "$HOME/.local/share/Steam" "$HOME/Library/Application Support/Steam" 2>&1 | head -20
-          echo "--- config dirs"; find "$D" "$HOME" -maxdepth 6 -type d -name config -path "*team*" 2>/dev/null | head
+          HOME="$H" ./steamcmd.sh +quit > out.txt 2>&1; echo "rc=$?"; tail -2 out.txt
+          echo "--- per-run HOME"; find "$H" -maxdepth 4 -type d | head -20
+          echo "--- real HOME"; ls -d ~/Steam ~/.steam ~/"Library/Application Support/Steam" 2>&1
