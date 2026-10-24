@@ -1,0 +1,44 @@
+name: Native steamcmd matrix
+
+on:
+  push:
+    branches:
+      - test/native-steamcmd-matrix
+
+jobs:
+  deploy:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04, ubuntu-26.04, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - shell: bash
+        run: mkdir -p build/content && echo test > build/content/test.txt
+      - name: Deploy with invalid credentials
+        id: deploy
+        continue-on-error: true
+        uses: ./
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          username: invalid-user-for-ci-test
+          password: invalid-password
+          appId: '480'
+          rootPath: build
+          depot1Path: content
+          releaseBranch: prerelease
+      - name: Expect a login failure, not an update failure
+        shell: bash
+        run: |
+          echo "outcome=${{ steps.deploy.outcome }}"
+          test "${{ steps.deploy.outcome }}" = failure
+      - name: Expect no Steam session left behind
+        shell: bash
+        run: |
+          ls -d "$RUNNER_TEMP"/steamcmd-* 2>/dev/null && { echo "steamcmd dir left behind"; exit 1; }
+          for d in ~/Steam ~/.steam ~/"Library/Application Support/Steam"; do
+            [ -e "$d" ] && { echo "$d exists"; exit 1; }
+          done
+          echo "clean"
